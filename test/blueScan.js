@@ -118,6 +118,16 @@ contract('BLUEScan', function (accounts) {
         await expectThrow(BSC.scanAddressWithHolding(accounts[1], BCN.address, { from: accounts[6] }))
     })
     
+
+    it('scan holding fail: valid payment method thats not ERC20', async () => {
+        await BSC.addAuthorizedAdmin(accounts[0], { from: accounts[0] });
+        // requires 5 blue held
+        await BSC.upsertPaymentMethod(accounts[2], "an address of an account", 2, 5, { from: accounts[0] });
+
+        // holding 5
+        await expectThrow(BSC.scanAddressWithHolding(accounts[1], BCN.address, { from: accounts[3] }));
+    })
+    
     it('scan holding success: event emmited', async () => {
         await BSC.addAuthorizedAdmin(accounts[0], { from: accounts[0] });
         // requires 5 blue held
