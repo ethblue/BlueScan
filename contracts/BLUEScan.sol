@@ -70,7 +70,8 @@ contract BLUEScan is Ownable {
      */
     event ScanResultSubmitted(address addressScanned);
     /**
-     * Mapping containing an array of ScanResults for the each address.
+     * Mapping containing a ScanResult object for each address scanned for each
+     * address that requested a scan.
      */
     mapping (address => mapping(
         address => ScanResult
@@ -157,9 +158,8 @@ contract BLUEScan is Ownable {
         require(paymentMethods[paymentMethodAddress].amountRequiredPayment > 0);
         require(addressToScan != address(0));
 
-        // TODO: audit for re-entrancy, possibly check for balance before and after
-        require(paymentMethodAddress.call(bytes4(keccak256("transferFrom(address,address,uint256)")), msg.sender, address(this), paymentMethods[paymentMethodAddress].amountRequiredPayment));
-
+        ERC20 token = ERC20(paymentMethodAddress);
+        require(token.transferFrom(msg.sender, address(this), paymentMethods[paymentMethodAddress].amountRequiredPayment));
 
         uint256 length = scanQueue.scanRequests.length;
         scanQueue.scanRequests.push(ScanRequest(msg.sender,addressToScan,now,length));
@@ -180,7 +180,7 @@ contract BLUEScan is Ownable {
         require(paymentMethods[paymentMethodAddress].amountRequiredHeld > 0);
         require(addressToScan != address(0));
 
-        BasicToken token = BasicToken(paymentMethodAddress);
+        ERC20 token = ERC20(paymentMethodAddress);
         require(token.balanceOf(msg.sender) >= paymentMethods[paymentMethodAddress].amountRequiredHeld);
 
         uint256 length = scanQueue.scanRequests.length;
@@ -192,10 +192,10 @@ contract BLUEScan is Ownable {
      * Upserts the given payment method info within the paymentMethods class 
      * member.
      *
-     * @param tokenAddress
-     * @param tokenNote
-     * @param amountRequiredPayment
-     * @param amountRequiredHeld
+     * @param tokenAddress The address of the payment method being added
+     * @param tokenNote A string note describing the payment method
+     * @param amountRequiredPayment The amount consumed when using the scanAddressWithPayment method
+     * @param amountRequiredHeld The amount required to be held when using the scanAddressWithHolding method
      */
     function upsertPaymentMethod (address tokenAddress, string tokenNote, uint256 amountRequiredPayment, uint256 amountRequiredHeld) external onlyAdmin {
         paymentMethods[tokenAddress] = PaymentMethod(tokenAddress, tokenNote, amountRequiredPayment, amountRequiredHeld);
@@ -205,10 +205,7 @@ contract BLUEScan is Ownable {
      * Removes the given payment method info within the paymentMethods class 
      * member.
      *
-     * @param tokenAddress
-     * @param tokenNote
-     * @param amountRequiredPayment
-     * @param amountRequiredHeld
+     * @param tokenAddress The address of the payment method being removed
      */
     function removePaymentMethod (address tokenAddress) external onlyAdmin {
         require(paymentMethods[tokenAddress].tokenAddress != address(0));
@@ -238,7 +235,7 @@ contract BLUEScan is Ownable {
     /**
      * Adds the given address to the authorizedScanWorkers class member.
      *
-     * @param workerAddress
+     * @param workerAddress The address of the worker being added
      */
     function addWorker (address workerAddress) external onlyAdmin {
         authorizedScanWorkers[workerAddress] = true;
@@ -246,7 +243,7 @@ contract BLUEScan is Ownable {
     /**
      * Removes the given address to the authorizedScanWorkers class member.
      *
-     * @param workerAddress
+     * @param workerAddress The address of the worker being removed
      */
     function removeWorker (address workerAddress) external onlyAdmin {
         delete authorizedScanWorkers[workerAddress];

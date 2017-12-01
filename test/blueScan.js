@@ -28,7 +28,7 @@ contract('BLUEScan', function (accounts) {
         var eventLog = res.logs.find(element => element.event.match('PaymentMethodUpdated'))
         assert.strictEqual(eventLog.args.paymentMethodAddress, BCN.address)
     })
-
+    
     it('scan payment fail: should not allow a scan with unsupported payment methods', async () => {
         await expectThrow(BSC.scanAddressWithPayment(accounts[1], BCN.address, { from: accounts[0] }))
     })
@@ -97,8 +97,61 @@ contract('BLUEScan', function (accounts) {
         await BSC.addScoreType("score_1", { from: accounts[0] });
         await BSC.addScoreType("score_2", { from: accounts[0] });
         var results = await BSC.getNextScanJob({ from: accounts[2] });
-        var res = await BSC.pushScanResult(results[0], "score_1=35;score_2=3443;", { from: accounts[2] });
+        var score = "score_1=35;score_2=3443;";
+        var res = await BSC.pushScanResult(results[0], score, { from: accounts[2] });
         var eventLog = res.logs.find(element => element.event.match('ScanResultSubmitted'))
         assert.strictEqual(eventLog.args.addressScanned, accounts[1])
+        var scoreResults = await BSC.getScanResult(accounts[1], { from: accounts[0]});
+        assert.strictEqual(scoreResults[1], score);
+    })
+
+    it('scan holding fail: should not allow a scan with unsupported payment methods', async () => {
+        await expectThrow(BSC.scanAddressWithHolding(accounts[1], BCN.address, { from: accounts[0] }))
+    })
+
+    it('scan holding fail: not enough holding for given payment method', async () => {
+        await BSC.addAuthorizedAdmin(accounts[0], { from: accounts[0] });
+        // requires 1 blue held
+        await BSC.upsertPaymentMethod(BCN.address, "BLUECoin, best payment method", 2, 1, { from: accounts[0] })
+
+        // dont have any
+        await expectThrow(BSC.scanAddressWithHolding(accounts[1], BCN.address, { from: accounts[6] }))
+    })
+    
+    it('scan holding success: event emmited', async () => {
+        await BSC.addAuthorizedAdmin(accounts[0], { from: accounts[0] });
+        // requires 5 blue held
+        await BSC.upsertPaymentMethod(BCN.address, "BLUECoin, best payment method", 2, 5, { from: accounts[0] });
+        // transfer account 3, 5 blue
+        await BCN.transfer(accounts[3], 5, { from: accounts[0] });
+
+        // holding 5
+        var res = await BSC.scanAddressWithHolding(accounts[1], BCN.address, { from: accounts[3] });
+        var eventLog = res.logs.find(element => element.event.match('ScanRequested'))
+        assert.strictEqual(eventLog.args.addressToScan, accounts[1])
+    })
+
+    it('scan payment result success: event emmited, result sent', async () => {
+        await BSC.addAuthorizedAdmin(accounts[0], { from: accounts[0] });
+        // requires 5 blue held
+        await BSC.upsertPaymentMethod(BCN.address, "BLUECoin, best payment method", 2, 5, { from: accounts[0] });
+        // transfer account 3, 5 blue
+        await BCN.transfer(accounts[3], 5, { from: accounts[0] });
+
+        // holding 5
+        var res = await BSC.scanAddressWithHolding(accounts[1], BCN.address, { from: accounts[3] });
+        var eventLog = res.logs.find(element => element.event.match('ScanRequested'))
+        assert.strictEqual(eventLog.args.addressToScan, accounts[1])
+
+        await BSC.addWorker(accounts[2], { from: accounts[0] });
+        await BSC.addScoreType("score_1", { from: accounts[0] });
+        await BSC.addScoreType("score_2", { from: accounts[0] });
+        var results = await BSC.getNextScanJob({ from: accounts[2] });
+        var score = "score_1=35;score_2=3443;";
+        var res = await BSC.pushScanResult(results[0], score, { from: accounts[2] });
+        var eventLog = res.logs.find(element => element.event.match('ScanResultSubmitted'))
+        assert.strictEqual(eventLog.args.addressScanned, accounts[1])
+        var scoreResults = await BSC.getScanResult(accounts[1], { from: accounts[3] });
+        assert.strictEqual(scoreResults[1], score);
     })
 });
