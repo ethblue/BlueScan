@@ -29,15 +29,3 @@ npm install
 truffle develop
 test
 ```
-
-## TODO
-1. Audit gas usage.
-2. Audit visiblity modifiers.
-3. Audit general security vulnerabilities.
-4. Add support for ether payments.
-5. Use saferMath library
-6. Test on non local network
-7. Finish method documentation
-8. Add way to retrieve results
-9. modifier to check a blacklist of addresses
-10. Test holdings workflow

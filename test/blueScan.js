@@ -24,9 +24,16 @@ contract('BLUEScan', function (accounts) {
 
     it('add payment method success: should add admin and allow new payment method', async () => {
         await BSC.addAuthorizedAdmin(accounts[1], { from: accounts[0]});
-        var res = await BSC.upsertPaymentMethod(BCN.address, "BLUECoin, best payment method", 1, 1, { from: accounts[1] })
+        var res = await BSC.upsertPaymentMethod(BCN.address, "BLUECoin, best payment method", 1, 2, { from: accounts[1] })
         var eventLog = res.logs.find(element => element.event.match('PaymentMethodUpdated'))
         assert.strictEqual(eventLog.args.paymentMethodAddress, BCN.address)
+        var number = await BSC.getNumberOfPaymentMethods();
+        assert.strictEqual(number.toNumber(), 1);
+        var info = await BSC.getPaymentMethodByIndex(0);
+        assert.strictEqual(info[0], BCN.address);
+        assert.strictEqual(info[1], "BLUECoin, best payment method");
+        assert.strictEqual(info[2].toNumber(), 1);
+        assert.strictEqual(info[3].toNumber(), 2);
     })
     
     it('scan payment fail: should not allow a scan with unsupported payment methods', async () => {

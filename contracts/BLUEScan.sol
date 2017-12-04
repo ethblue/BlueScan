@@ -59,7 +59,7 @@ contract BLUEScan is Ownable {
          * The timestamp the scan result was initated.
          */
         uint256 timestamp;
-        // -------------------------------------------------------------------->
+        // -------------------------------------------------------------------->----
         /**
          * A semicolon delimited set of scores.
          */
@@ -105,7 +105,11 @@ contract BLUEScan is Ownable {
     /**
      * Mapping of supported payment methods or Tokens.
      */
-    mapping (address => PaymentMethod) private paymentMethods;     
+    mapping (address => PaymentMethod) private paymentMethods;
+    /**
+     * An array of supported payment method addresses, used for enumeration.
+     */
+    address[] private paymentMethodAddresses;
     /**
      * The event logged when a payment method is added or updated.
      */
@@ -198,6 +202,10 @@ contract BLUEScan is Ownable {
      * @param amountRequiredHeld The amount required to be held when using the scanAddressWithHolding method
      */
     function upsertPaymentMethod (address tokenAddress, string tokenNote, uint256 amountRequiredPayment, uint256 amountRequiredHeld) external onlyAdmin {
+        if (paymentMethods[tokenAddress].tokenAddress == address(0)) {
+            paymentMethodAddresses.push(tokenAddress);
+        }
+
         paymentMethods[tokenAddress] = PaymentMethod(tokenAddress, tokenNote, amountRequiredPayment, amountRequiredHeld);
         PaymentMethodUpdated(tokenAddress);
     }
@@ -211,6 +219,26 @@ contract BLUEScan is Ownable {
         require(paymentMethods[tokenAddress].tokenAddress != address(0));
         delete paymentMethods[tokenAddress];
         PaymentMethodRemoved(tokenAddress);
+    }
+    /**
+     * Returns the number supported payment methods. Use this to iterate through
+     * all available payment methods using getPaymentMethodByIndex.
+     */
+    function getNumberOfPaymentMethods() external constant returns (uint256) {
+        return paymentMethodAddresses.length;
+    }
+    /**
+     * Returns the information about the payment method at the given index within
+     * the paymentMethods array.
+     */
+    function getPaymentMethodByIndex(uint256 paymentMethodIndex) external constant returns (address, string, uint256, uint256) {
+        PaymentMethod memory method = paymentMethods[paymentMethodAddresses[paymentMethodIndex]];
+        return (
+            method.tokenAddress,
+            method.tokenNote,
+            method.amountRequiredPayment,
+            method.amountRequiredHeld
+        );
     }
     // ------------------------------------------------------------------------>
     /**
@@ -249,14 +277,28 @@ contract BLUEScan is Ownable {
         delete authorizedScanWorkers[workerAddress];
     }
     // ------------------------------------------------------------------------>
+    /**
+     * Adds the given address to the admin authorizedAdmins class member.
+     * 
+     * @param adminAddress The address of the admin being added
+     */
     function addAuthorizedAdmin (address adminAddress) external onlyOwner {
         authorizedAdmins[adminAddress] = true;
     }
+    /**
+     * Removes the given address to the authorizedAdmins class member.
+     * 
+     * @param adminAddress The address of the admin being added
+     */
     function removeAuthorizedAdmin (address adminAddress) external onlyOwner {
         delete authorizedAdmins[adminAddress];
     }
     // ------------------------------------------------------------------------>
-    function getNextScanJob() constant external onlyWorker  returns (uint256, address, address, uint256, uint256) {
+    /**
+     * Returns the information about the current job set to be processed.
+     *
+     */
+    function getNextScanJob() constant external onlyWorker returns (uint256, address, address, uint256, uint256) {
         ScanRequest memory nextScanJob = scanQueue.scanRequests[scanQueue.nextJob];
         require(nextScanJob.timestamp != 0);
         return (
@@ -267,6 +309,14 @@ contract BLUEScan is Ownable {
             nextScanJob.scanRequestsIndex
         );
     }
+    /**
+     * Validates the given scan job exists and that the given score types are 
+     * valid.
+     *
+     * @param scanJobIndex The index of the scan job the given results belong to
+     * @param scanResultsKvp A key value pair string that includes the scan
+     * results delimited by a semicolon. Example: score_1=5;score_2=6;
+     */
     function pushScanResult (uint256 scanJobIndex, string scanResultsKvp) external onlyWorker {
         require(scanQueue.scanRequests[scanJobIndex].timestamp != 0);
 
@@ -288,13 +338,17 @@ contract BLUEScan is Ownable {
             scoreKey = score.split(delimiterEquals).toString();
             require(validScoreTypes[scoreKey] == true);
         }
-        
+                
         scanResults[addressScanRequestor][addressScanned] = ScanResult(msg.sender, now, scanResultsKvp);
         ScanResultSubmitted(addressScanned);
         delete scanQueue.scanRequests[scanJobIndex];
 
         scanQueue.nextJob++;
     }
+    /**
+     * Returns the timestamp and scan result string for the given address that
+     * was requested by the message sender.
+     */
     function getScanResult(address addressScanned) constant external returns (uint256, string) {
         require(scanResults[msg.sender][addressScanned].timestamp != 0);
         return (
